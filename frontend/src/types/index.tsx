@@ -1,8 +1,8 @@
 export interface MLAnalysisData {
     sector1: string;
     sector2: string;
-    csvPath1: string;
-    csvPath2: string;
+    csvFile1: File | null;
+    csvFile2: File | null;
     riskFactor: string;
   }
   

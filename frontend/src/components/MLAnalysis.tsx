@@ -10,8 +10,8 @@ import { MLAnalysisData, MLResults } from '../types';
 const INITIAL_FORM_DATA: MLAnalysisData = {
   sector1: '',
   sector2: '',
-  csvPath1: '',
-  csvPath2: '',
+  csvFile1: null,
+  csvFile2: null,
   riskFactor: '',
 };
 
@@ -29,17 +29,30 @@ const MLAnalysis: React.FC = () => {
     }));
   };
 
+  const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>, field: 'csvFile1' | 'csvFile2') => {
+    const file = e.target.files?.[0];
+    setFormData(prev => ({
+      ...prev,
+      [field]: file || null
+    }));
+  };
+
   const handleSubmit = async () => {
     try {
       setLoading(true);
       setError(null);
 
+      // Create a FormData object to send the files
+      const formPayload = new FormData();
+      formPayload.append('sector1', formData.sector1);
+      formPayload.append('sector2', formData.sector2);
+      formPayload.append('csvFile1', formData.csvFile1 as File);
+      formPayload.append('csvFile2', formData.csvFile2 as File);
+      formPayload.append('riskFactor', formData.riskFactor);
+
       const response = await fetch('/portfolio_optimization', {
         method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify(formData),
+        body: formPayload,
       });
 
       if (!response.ok) {
@@ -55,7 +68,7 @@ const MLAnalysis: React.FC = () => {
     }
   };
 
-  const isFormValid = Object.values(formData).every(value => value !== '');
+  const isFormValid = Object.values(formData).every(value => value !== '' && value !== null);
 
   return (
     <Card>
@@ -80,16 +93,16 @@ const MLAnalysis: React.FC = () => {
             onChange={handleInputChange}
           />
           <Input
-            name="csvPath1"
-            placeholder="First CSV Path"
-            value={formData.csvPath1}
-            onChange={handleInputChange}
+            name="csvFile1"
+            type="file"
+            placeholder="First CSV File"
+            onChange={(e) => handleFileChange(e, 'csvFile1')}
           />
           <Input
-            name="csvPath2"
-            placeholder="Second CSV Path"
-            value={formData.csvPath2}
-            onChange={handleInputChange}
+            name="csvFile2"
+            type="file"
+            placeholder="Second CSV File"
+            onChange={(e) => handleFileChange(e, 'csvFile2')}
           />
           <Input
             name="riskFactor"

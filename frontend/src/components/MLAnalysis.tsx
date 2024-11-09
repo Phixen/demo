@@ -5,14 +5,36 @@ import { Button } from '../../componets/ui/button';
 import { Alert, AlertDescription } from '../../componets/ui/alert';
 import { Loader2, TrendingUp } from 'lucide-react';
 import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer } from 'recharts';
-import { MLAnalysisData, MLResults } from '../types';
+
+interface MLAnalysisData {
+  sector1: string;
+  sector2: string;
+  csvFile1: File | null;
+  csvFile2: File | null;
+  riskFactor: string;
+}
+
+interface MLResults {
+  predictions: {
+    sector1: number[];
+    sector2: number[];
+  };
+  graphData: Array<{
+    name: string;
+    [key: string]: string | number;
+  }>;
+  optimalWeights: {
+    sector1: number;
+    sector2: number;
+  };
+}
 
 const INITIAL_FORM_DATA: MLAnalysisData = {
   sector1: '',
   sector2: '',
   csvFile1: null,
   csvFile2: null,
-  riskFactor: '',
+  riskFactor: '0.5',
 };
 
 const MLAnalysis: React.FC = () => {
@@ -42,72 +64,94 @@ const MLAnalysis: React.FC = () => {
       setLoading(true);
       setError(null);
 
-      // Create a FormData object to send the files
       const formPayload = new FormData();
       formPayload.append('sector1', formData.sector1);
       formPayload.append('sector2', formData.sector2);
-      formPayload.append('csvFile1', formData.csvFile1 as File);
-      formPayload.append('csvFile2', formData.csvFile2 as File);
+      if (formData.csvFile1) formPayload.append('csvFile1', formData.csvFile1);
+      if (formData.csvFile2) formPayload.append('csvFile2', formData.csvFile2);
       formPayload.append('riskFactor', formData.riskFactor);
 
-      const response = await fetch('/portfolio_optimization', {
+      const response = await fetch('http://127.0.0.1:5000/portfolio_optimization', {
         method: 'POST',
         body: formPayload,
+        // Remove headers as FormData sets the correct Content-Type automatically
+        // Add mode and credentials
+        mode: 'cors',
+        credentials: 'same-origin'
       });
 
       if (!response.ok) {
-        throw new Error(`API call failed with status: ${response.status}`);
+        const errorData = await response.json().catch(() => null);
+        throw new Error(errorData?.error || `API call failed with status: ${response.status}`);
       }
 
       const data = await response.json();
+      if (data.error) {
+        throw new Error(data.error);
+      }
+      
       setResults(data);
     } catch (err) {
-      setError(err instanceof Error ? err.message : 'An error occurred');
+      console.error('API Error:', err); // For debugging
+      setError(err instanceof Error ? err.message : 'Failed to connect to the server. Please check if the backend is running.');
     } finally {
       setLoading(false);
     }
   };
 
-  const isFormValid = Object.values(formData).every(value => value !== '' && value !== null);
+  const isFormValid = formData.sector1 !== '' && 
+                     formData.sector2 !== '' && 
+                     formData.csvFile1 !== null && 
+                     formData.csvFile2 !== null && 
+                     formData.riskFactor !== '';
 
   return (
     <Card>
       <CardHeader>
         <CardTitle className="flex items-center gap-2">
           <TrendingUp className="h-5 w-5" />
-          ML Analysis Dashboard
+          Portfolio Optimization Dashboard
         </CardTitle>
       </CardHeader>
       <CardContent className="space-y-4">
         <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
           <Input
             name="sector1"
-            placeholder="First Sector"
+            placeholder="First Sector Name"
             value={formData.sector1}
             onChange={handleInputChange}
           />
           <Input
             name="sector2"
-            placeholder="Second Sector"
+            placeholder="Second Sector Name"
             value={formData.sector2}
             onChange={handleInputChange}
           />
-          <Input
-            name="csvFile1"
-            type="file"
-            placeholder="First CSV File"
-            onChange={(e) => handleFileChange(e, 'csvFile1')}
-          />
-          <Input
-            name="csvFile2"
-            type="file"
-            placeholder="Second CSV File"
-            onChange={(e) => handleFileChange(e, 'csvFile2')}
-          />
+          <div className="space-y-1">
+            <label className="text-sm font-medium">First Sector CSV</label>
+            <Input
+              name="csvFile1"
+              type="file"
+              accept=".csv"
+              onChange={(e) => handleFileChange(e, 'csvFile1')}
+            />
+          </div>
+          <div className="space-y-1">
+            <label className="text-sm font-medium">Second Sector CSV</label>
+            <Input
+              name="csvFile2"
+              type="file"
+              accept=".csv"
+              onChange={(e) => handleFileChange(e, 'csvFile2')}
+            />
+          </div>
           <Input
             name="riskFactor"
-            placeholder="Risk Factor"
+            placeholder="Risk Factor (0-1)"
             type="number"
+            min="0"
+            max="1"
+            step="0.1"
             className="col-span-full"
             value={formData.riskFactor}
             onChange={handleInputChange}
@@ -125,7 +169,7 @@ const MLAnalysis: React.FC = () => {
               Processing...
             </>
           ) : (
-            'Run ML Analysis'
+            'Run Portfolio Analysis'
           )}
         </Button>
 
@@ -139,16 +183,18 @@ const MLAnalysis: React.FC = () => {
           <div className="space-y-6">
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
               <div>
-                <h4 className="font-medium mb-1">{formData.sector1} Predictions</h4>
-                <pre className="bg-gray-100 p-2 rounded text-sm overflow-x-auto">
-                  {results.predictions.sector1.slice(0, 5).join('\n')}
-                </pre>
+                <h4 className="font-medium mb-1">Optimal Portfolio Weights</h4>
+                <div className="bg-gray-100 p-4 rounded">
+                  <p>{formData.sector1}: {results.optimalWeights.sector1}%</p>
+                  <p>{formData.sector2}: {results.optimalWeights.sector2}%</p>
+                </div>
               </div>
               <div>
-                <h4 className="font-medium mb-1">{formData.sector2} Predictions</h4>
-                <pre className="bg-gray-100 p-2 rounded text-sm overflow-x-auto">
-                  {results.predictions.sector2.slice(0, 5).join('\n')}
-                </pre>
+                <h4 className="font-medium mb-1">Price Predictions</h4>
+                <div className="bg-gray-100 p-4 rounded">
+                  <p className="mb-2">{formData.sector1}: ${results.predictions.sector1[0]}</p>
+                  <p>{formData.sector2}: ${results.predictions.sector2[0]}</p>
+                </div>
               </div>
             </div>
 
@@ -164,11 +210,13 @@ const MLAnalysis: React.FC = () => {
                     type="monotone" 
                     dataKey={formData.sector1} 
                     stroke="#8884d8" 
+                    name={`${formData.sector1} Return (%)`}
                   />
                   <Line 
                     type="monotone" 
                     dataKey={formData.sector2} 
                     stroke="#82ca9d" 
+                    name={`${formData.sector2} Volatility (%)`}
                   />
                 </LineChart>
               </ResponsiveContainer>
